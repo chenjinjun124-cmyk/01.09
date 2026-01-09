@@ -3,111 +3,188 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>飲料喜好數據分析儀表板</title>
+    <title>飲領潮流 | 學生飲料喜好大數據</title>
+    
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://unpkg.com/aos@2.3.1/dist/aos.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
     <script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
+
     <style>
-        body { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; color: white; }
-        .glass-card { background: rgba(255, 255, 255, 0.15); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 1.5rem; }
-        .chart-container { position: relative; height: 300px; }
+        body { 
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+            min-height: 100vh; 
+            color: white; 
+            font-family: "Microsoft JhengHei", sans-serif;
+        }
+        .glass-card { 
+            background: rgba(255, 255, 255, 0.15); 
+            backdrop-filter: blur(12px); 
+            border: 1px solid rgba(255, 255, 255, 0.2); 
+            border-radius: 1.5rem; 
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+        }
+        .chart-container { position: relative; height: 320px; width: 100%; }
+        /* 滾動條樣式 */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.3); border-radius: 10px; }
     </style>
 </head>
-<body class="p-6">
-    <div class="max-w-6xl mx-auto text-center mb-10">
-        <h1 class="text-4xl font-bold mb-2">🥤 學生飲料喜好數據分析</h1>
-        <div id="status" class="inline-block px-3 py-1 rounded-full bg-green-500 text-sm">數據即時連線中</div>
+<body class="p-4 md:p-10">
+
+    <div class="max-w-6xl mx-auto text-center mb-12" data-aos="fade-down">
+        <h1 class="text-4xl md:text-5xl font-black mb-4 flex justify-center items-center gap-3">
+            🥤 學生飲料喜好數據分析
+        </h1>
+        <div id="status-tag" class="inline-block px-4 py-1 rounded-full bg-green-500 text-sm font-bold shadow-lg">
+            數據同步中
+        </div>
     </div>
 
     <div class="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-8">
-        <div class="glass-card p-8" data-aos="fade-up">
-            <h3 class="text-xl font-bold mb-4">📊 就讀年級分佈</h3>
-            <div class="chart-container"><canvas id="gradeChart"></canvas></div>
+        
+        <div class="glass-card p-8" data-aos="fade-right">
+            <h3 class="text-2xl font-bold mb-6 flex items-center gap-2">📊 就讀年級分佈</h3>
+            <div class="chart-container">
+                <canvas id="gradeChart"></canvas>
+            </div>
         </div>
 
-        <div class="glass-card p-8" data-aos="fade-up" data-aos-delay="200">
-            <h3 class="text-xl font-bold mb-4">🍹 最喜歡的飲品類別</h3>
-            <div class="chart-container"><canvas id="drinkChart"></canvas></div>
+        <div class="glass-card p-8" data-aos="fade-left">
+            <h3 class="text-2xl font-bold mb-6 flex items-center gap-2">🍹 最喜歡的飲品類別</h3>
+            <div class="chart-container">
+                <canvas id="drinkChart"></canvas>
+            </div>
         </div>
 
         <div class="glass-card p-8 md:col-span-2" data-aos="fade-up">
-            <h3 class="text-xl font-bold mb-4">📝 最新意見 (習慣甜度摘要)</h3>
-            <div id="commentList" class="grid grid-cols-2 md:grid-cols-4 gap-4"></div>
+            <h3 class="text-2xl font-bold mb-6 flex items-center gap-2">📝 習慣甜度摘要 (即時回饋)</h3>
+            <div id="sugarList" class="flex flex-wrap gap-3">
+                </div>
         </div>
     </div>
 
     <script>
-        // 加入時間戳記強制刷新，確保不讀取舊資料
+        // Google 試算表發布的 CSV 網址 (加上時間戳記避免快取)
         const CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTxj6-BEjCk5-VqEgMdY1q8YUZYQb2HKnB3l6ZViTVdKf1_RtUIrEqU7uxeXZhQ_PoormenvfhZ4r5b/pub?output=csv' + '&t=' + Date.now();
 
-        async function init() {
+        async function initDashboard() {
             try {
-                const res = await fetch(CSV_URL);
-                const text = await res.text();
-                Papa.parse(text, {
+                const response = await fetch(CSV_URL);
+                if (!response.ok) throw new Error('無法連線至數據源');
+                
+                const csvText = await response.text();
+                
+                Papa.parse(csvText, {
                     header: true,
-                    complete: (results) => processRealData(results.data)
+                    skipEmptyLines: true,
+                    complete: (results) => {
+                        console.log("成功抓取資料:", results.data);
+                        processAndRender(results.data);
+                    }
                 });
-            } catch (e) {
-                document.getElementById('status').className = "bg-red-500 px-3 py-1 rounded-full text-sm";
-                document.getElementById('status').innerText = "連線失敗";
+            } catch (error) {
+                console.error(error);
+                const tag = document.getElementById('status-tag');
+                tag.innerText = "連線失敗：" + error.message;
+                tag.classList.replace('bg-green-500', 'bg-red-500');
             }
         }
 
-        function processRealData(data) {
-            const grades = {};
-            const drinks = {};
-            const sugars = [];
+        function processAndRender(data) {
+            const gradeCounts = {};
+            const drinkCounts = {};
+            const sugarTypes = [];
+
+            // 模糊搜尋欄位名稱（解決標題驚嘆號或編號問題）
+            const keys = Object.keys(data[0]);
+            const gradeKey = keys.find(k => k.includes('年級')) || '2. 就讀年級';
+            const drinkKey = keys.find(k => k.includes('飲品類別')) || '8. 最喜歡的飲品類別！';
+            const sugarKey = keys.find(k => k.includes('甜度')) || '9. 習慣的甜度';
 
             data.forEach(row => {
-                // 精準匹配你截圖中的標題名稱
-                const g = row['2. 就讀年級'];
-                const d = row['8. 最喜歡的飲品類別！'];
-                const s = row['9. 習慣的甜度'];
+                // 1. 年級統計
+                const g = row[gradeKey];
+                if (g) gradeCounts[g] = (gradeCounts[g] || 0) + 1;
 
-                if (g) grades[g] = (grades[g] || 0) + 1;
-                if (d) drinks[d] = (drinks[d] || 0) + 1;
-                if (s) sugars.push(s);
+                // 2. 飲品類別統計
+                const d = row[drinkKey];
+                if (d) drinkCounts[d] = (drinkCounts[d] || 0) + 1;
+
+                // 3. 甜度清單
+                if (row[sugarKey]) sugarTypes.push(row[sugarKey]);
             });
 
-            renderCharts(grades, drinks);
-            renderSugarTags(sugars);
-            AOS.init({ duration: 1000 });
+            renderGradeChart(gradeCounts);
+            renderDrinkChart(drinkCounts);
+            renderSugarTags(sugarTypes);
+
+            // 啟動 AOS 動畫
+            AOS.init({ duration: 800, once: true });
         }
 
-        function renderCharts(gradeData, drinkData) {
-            // 年級圖表
+        function renderGradeChart(counts) {
             new Chart(document.getElementById('gradeChart'), {
-                type: 'pie',
+                type: 'doughnut',
                 data: {
-                    labels: Object.keys(gradeData),
-                    datasets: [{ data: Object.values(gradeData), backgroundColor: ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF'] }]
+                    labels: Object.keys(counts),
+                    datasets: [{
+                        data: Object.values(counts),
+                        backgroundColor: ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF'],
+                        hoverOffset: 15,
+                        borderWidth: 0
+                    }]
                 },
-                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: 'white' } } } }
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'bottom', labels: { color: 'white', font: { size: 14 } } }
+                    }
+                }
             });
+        }
 
-            // 飲品圖表
+        function renderDrinkChart(counts) {
             new Chart(document.getElementById('drinkChart'), {
                 type: 'bar',
                 data: {
-                    labels: Object.keys(drinkData),
-                    datasets: [{ label: '人數', data: Object.values(drinkData), backgroundColor: 'rgba(255, 255, 255, 0.7)' }]
+                    labels: Object.keys(counts),
+                    datasets: [{
+                        label: '選擇人數',
+                        data: Object.values(counts),
+                        backgroundColor: 'rgba(255, 255, 255, 0.6)',
+                        borderColor: '#ffffff',
+                        borderWidth: 1,
+                        borderRadius: 8
+                    }]
                 },
-                options: { 
-                    responsive: true, maintainAspectRatio: false,
-                    scales: { y: { ticks: { color: 'white' } }, x: { ticks: { color: 'white' } } }
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: { beginAtZero: true, ticks: { color: 'white' }, grid: { color: 'rgba(255,255,255,0.1)' } },
+                        x: { ticks: { color: 'white' }, grid: { display: false } }
+                    },
+                    plugins: {
+                        legend: { display: false }
+                    }
                 }
             });
         }
 
         function renderSugarTags(sugars) {
-            const list = document.getElementById('commentList');
-            list.innerHTML = sugars.map(s => `<div class="bg-white/10 p-2 rounded text-center border border-white/20">${s}</div>`).join('');
+            const container = document.getElementById('sugarList');
+            container.innerHTML = sugars.map(s => `
+                <span class="px-4 py-2 bg-white/10 border border-white/20 rounded-lg text-sm hover:bg-white/20 transition-all cursor-default">
+                    ${s}
+                </span>
+            `).join('');
         }
 
-        window.onload = init;
+        // 初始化
+        window.onload = initDashboard;
     </script>
 </body>
 </html>
