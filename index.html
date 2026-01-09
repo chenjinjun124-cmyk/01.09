@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>飲領潮流 | 學生喜好分析儀表板</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://unpkg.com/aos@2.3.1/dist/aos.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
+    <script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
+
+    <style>
+        body { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; color: white; font-family: sans-serif; }
+        .glass-card { background: rgba(255, 255, 255, 0.15); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 1.5rem; transition: transform 0.3s; }
+        .glass-card:hover { transform: translateY(-5px); }
+        .chart-container { position: relative; height: 300px; width: 100%; }
+    </style>
+</head>
+<body class="p-6 md:p-12">
+
+    <div class="max-w-6xl mx-auto text-center mb-12" data-aos="fade-down">
+        <h1 class="text-4xl md:text-5xl font-bold mb-4">🥤 學生飲料喜好數據分析</h1>
+        <div id="status-tag" class="inline-block px-4 py-1 rounded-full bg-green-500 text-sm font-bold">系統連線中</div>
+    </div>
+
+    <div class="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-8">
+        <div class="glass-card p-8" data-aos="zoom-in">
+            <h3 class="text-2xl font-bold mb-6 flex items-center">📊 年級分佈</h3>
+            <div class="chart-container"><canvas id="gradeChart"></canvas></div>
+        </div>
+
+        <div class="glass-card p-8" data-aos="zoom-in" data-aos-delay="200">
+            <h3 class="text-2xl font-bold mb-6 flex items-center">🥗 飲食習慣</h3>
+            <div class="chart-container"><canvas id="dietChart"></canvas></div>
+        </div>
+
+        <div class="glass-card p-8 md:col-span-2" data-aos="fade-up">
+            <h3 class="text-2xl font-bold mb-4 flex items-center">📝 最新意見回饋</h3>
+            <div id="commentList" class="space-y-3 max-h-60 overflow-y-auto pr-2 text-blue-50"></div>
+        </div>
+    </div>
+
+    <script>
+        // ⚠️ 請確保此網址在瀏覽器能直接下載 CSV
+        const CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTxj6-BEjCk5-VqEgMdY1q8YUZYQb2HKnB3l6ZViTVdKf1_RtUIrEqU7uxeXZhQ_PoormenvfhZ4r5b/pub?output=csv';
+
+        // 💡 備用資料：如果連不到 Google，就跑這個（確保網頁不空白）
+        const fallbackData = [
+            { "年級": "大一", "飲食習慣": "葷食", "備註": "範例資料：好想喝珍奶" },
+            { "年級": "大二", "飲食習慣": "素食", "備註": "範例資料：微冰微糖" },
+            { "年級": "大三", "飲食習慣": "不吃牛", "備註": "範例資料：今天天氣不錯" }
+        ];
+
+        async function init() {
+            try {
+                const response = await fetch(CSV_URL);
+                if (!response.ok) throw new Error('Network response was not ok');
+                const csvText = await response.text();
+                
+                Papa.parse(csvText, {
+                    header: true,
+                    complete: (results) => startApp(results.data)
+                });
+            } catch (error) {
+                console.warn("無法連接 Google 表單，啟動演示模式:", error);
+                document.getElementById('status-tag').textContent = "演示模式 (連線失敗)";
+                document.getElementById('status-tag').classList.replace('bg-green-500', 'bg-orange-500');
+                startApp(fallbackData);
+            }
+        }
+
+        function startApp(data) {
+            const gradeCounts = {};
+            const dietCounts = {};
+            const comments = [];
+
+            data.forEach(row => {
+                if (row['年級']) gradeCounts[row['年級']] = (gradeCounts[row['年級']] || 0) + 1;
+                if (row['飲食習慣']) {
+                    row['飲食習慣'].split(',').forEach(d => {
+                        const item = d.trim();
+                        dietCounts[item] = (dietCounts[item] || 0) + 1;
+                    });
+                }
+                if (row['備註']) comments.push(row['備註']);
+            });
+
+            renderCharts(gradeCounts, dietCounts);
+            renderComments(comments);
+            
+            // 最後才啟動動畫
+            AOS.init({ duration: 1000, once: true });
+        }
+
+        function renderCharts(gradeData, dietData) {
+            new Chart(document.getElementById('gradeChart'), {
+                type: 'doughnut',
+                data: {
+                    labels: Object.keys(gradeData),
+                    datasets: [{
+                        data: Object.values(gradeData),
+                        backgroundColor: ['#4ade80', '#60a5fa', '#fbbf24', '#f87171'],
+                        borderWidth: 0
+                    }]
+                },
+                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: 'white' } } } }
+            });
+
+            new Chart(document.getElementById('dietChart'), {
+                type: 'bar',
+                data: {
+                    labels: Object.keys(dietData),
+                    datasets: [{
+                        label: '人數',
+                        data: Object.values(dietData),
+                        backgroundColor: 'rgba(255, 255, 255, 0.6)'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: { ticks: { color: 'white' }, grid: { color: 'rgba(255,255,255,0.1)' } },
+                        x: { ticks: { color: 'white' } }
+                    }
+                }
+            });
+        }
+
+        function renderComments(comments) {
+            const container = document.getElementById('commentList');
+            container.innerHTML = comments.map(c => 
+                `<div class="bg-white bg-opacity-10 p-3 rounded-lg border-l-4 border-yellow-400">"${c}"</div>`
+            ).join('');
+        }
+
+        window.onload = init;
+    </script>
+</body>
+</html>
